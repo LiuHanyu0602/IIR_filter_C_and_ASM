@@ -1,0 +1,32 @@
+# Build outputs
+Debug/
+Release/
+build/
+*.o
+*.d
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+*.axf
+
+# STM32CubeIDE / Eclipse local files
+.metadata/
+.settings/
+.project
+.cproject
+.mxproject
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak

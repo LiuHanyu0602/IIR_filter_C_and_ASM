@@ -1,108 +1,66 @@
-# IIR Filter — Background & Assignment Guide
+# IIR Filter in C and ARM Assembly
 
-This document introduces the background concepts of Infinite Impulse Response (IIR) filters and summarizes the assignment brief for implementing an ARMv7‑M assembly version of an IIR filter callable from C.
+This repository contains an embedded systems assignment implementing an Infinite Impulse Response (IIR) digital filter in C and ARM Cortex-M assembly.
 
----
+The project compares a reference C implementation with optimized assembly implementations that can be called directly from C using the ARM Architecture Procedure Call Standard (AAPCS).
 
-## 1. Background Concepts
+## Project Goals
 
-A function or subroutine can be programmed in assembly language and called from a C program. A well‑written assembly function can execute faster than its C counterpart.
+- Implement an integer IIR filter in ARMv7-M assembly.
+- Call the assembly function from a C test driver.
+- Compare assembly output against a reference C implementation.
+- Explore history-buffer management and assembly-level optimization.
 
-**Infinite impulse response (IIR) filters** are digital filters whose impulse response does **not** become exactly zero after a finite number of samples; it continues indefinitely. In practice, the response typically decays toward zero and can be neglected after some point.
+## IIR Filter Form
 
-For simplicity, assume the IIR filter has the same feedforward and feedback order \(N\). The output \(y[n]\) relates to the input \(x[n]\) as:
+For a filter of order `N`, the output sample is computed from current and previous input/output samples:
 
-$$
-\begin{aligned}
-y[n]
-&= \frac{1}{a_0}\Big( b_0 x[n] + b_1 x[n-1] + \cdots + b_N x[n-N]
-      - a_1 y[n-1] - a_2 y[n-2] - \cdots - a_N y[n-N] \Big) \\
-&= \frac{1}{a_0}\!\left(\sum_{i=0}^{N} b_i\,x[n-i] \;-\; \sum_{j=1}^{N} a_j\,y[n-j]\right) \\
-&= \frac{b_0}{a_0}\x[n] \+\ \frac{1}{a_0}\\left(\sum_{i=1}^{N}\big(b_i x[n-i] - a_i y[n-i]\big)\right).
-\end{aligned}
-$$
-
-
-
-**Notation**
-
-- \(x[n]\): current input sample.  
-- \(x[n-i]\): input delayed by \(i\) samples.  
-- \(y[n]\): current output sample.  
-- \(y[n-i]\): previous output delayed by \(i\) samples.  
-- \(N\): filter order; an \(N^{\text{th}}\)-order filter has \(N{+}1\) feedforward terms and \(N\) feedback terms.  
-- \(b_i\): feedforward coefficients (\(i=0\ldots N\)).  
-- \(a_i\): feedback coefficients (\(i=0\ldots N\)).
-
-**Block diagram intuition**  
-In standard diagrams, \(z^{-1}\) denotes a one‑sample delay (the upper box’s value is a one‑sample‑delayed version of the value directly below it). Depending on the coefficient set, IIR filters can realize high‑pass, low‑pass, band‑pass, or band‑reject responses. Compared with FIR, IIR can meet specs (passband/stopband/ripple/roll‑off) with fewer computations per sample.
-
-**Additional resource**  
-A concise video explainer (watch **5:41–10:00**): <https://www.youtube.com/watch?v=QRMe02kzVkA&t=341s>
-
----
-
-## 2. Objectives
-
-Implement the following ARMv7‑M assembly function, callable from C:
-
-```c
-int iir(int N, int* b, int* a, int x_n);
+```text
+y[n] = (b0*x[n] + b1*x[n-1] + ... + bN*x[n-N]
+       - a1*y[n-1] - ... - aN*y[n-N]) / a0
 ```
 
-Where:
+The implementation uses scaled integers instead of floating point values. Coefficients such as `1.00`, `2.50`, and `3.60` are represented as `100`, `250`, and `360`.
 
-- **`y_n`** — the function’s return value — is the current output sample \(y[n]\).  
-- **`N`** — filter order; a constant **`N_MAX`** (assume **10**) is defined in `main.c` and must also be declared in `iir.s`. Require `N ≤ N_MAX`.  
-- **`b`** — pointer to an array of **N+1** feedforward coefficients `b0 … bN`.  
-- **`a`** — pointer to an array of **N+1** feedback coefficients `a0 … aN`.  
-- **`x_n`** — current input sample \(x[n]\).
+## Repository Layout
 
-> The internal memory holding delayed versions of `x_n` and `y_n` is **not guaranteed to be zero** at program start. Because the recursion uses past outputs, invalid/garbage history must not be used. Proper one‑time initialization is required.
-
-A reference C implementation `iir_c()` is provided to compare results printed in STM32CubeIDE’s console.
-
----
-
-## 3. Getting Started
-
-### (a) Initial Program Layout
-
-- **`iir.s`** — write the ARMv7‑M assembly implementation here.  
-- **`main.c`** — C driver that calls your assembly function.
-
-### (b) Parameter Passing (AAPCS for Cortex‑M)
-
-Arguments from C are passed in **R0–R3**; return value is in **R0**:
-
-```c
-extern int iir(arg1, arg2, ...);
-// arg1 -> R0, arg2 -> R1, arg3 -> R2, arg4 -> R3; return -> R0
+```text
+.
+├── main.c              # C test driver and reference IIR implementation
+├── iir_ring_buffer.s   # ARM assembly implementation using circular buffers
+├── iir_2_loop_in_1.s   # ARM assembly implementation merging sum and shift logic
+├── docs/               # Assignment and implementation notes
+└── README.md
 ```
 
-### (c) Procedure & Constraints
+## Main Files
 
-- The assembly program only handles **integers**. Use **`SDIV`** for divisions.  
-- **Allocate sufficient static memory** to store delayed values of `x_n` and the previously generated `y_n` inside the assembly module (e.g., `.bss`/`.lcomm`).  
-- Declare **`N_MAX`** in `iir.s` as well (even if it’s `#define`d in C), because the assembly needs static storage sized to the maximum order.  
-- Your assembly must work for any valid parameter set with `N ≤ N_MAX`; arrays `a` and `b` each have **N+1** elements; the input buffer size (if any) must be ≥ **N+1**.  
-- Verify correctness by comparing with `iir_c()` outputs printed to the console.
+- `main.c`: defines test coefficients, input samples, the reference `iir_c()` function, and calls the assembly `iir()` function.
+- `iir_ring_buffer.s`: stores input/output history in circular buffers to avoid shifting arrays on every sample.
+- `iir_2_loop_in_1.s`: combines summation and history shifting to reduce loop overhead.
 
----
+## Function Interface
 
-## 4. Hints & Implementation Notes
+```c
+extern int iir(int N, int *b, int *a, int x_n);
+```
 
-- Prefer a **circular buffer** for histories to avoid O(N) shifts (update becomes O(1)).  
-- Use simple address arithmetic where possible (e.g., `LSLS #2` for 32‑bit word offsets).  
-- Guard **one‑time initialization** with a flag to avoid resetting valid history on subsequent calls.  
-- Treat \(a_0=1\) if specified; otherwise divide by \(a_0\) where required.  
-- Keep the function **leaf** (no sub‑calls) to minimize prologue/epilogue overhead.  
-- Cross‑check results against the C version on corner cases (e.g., step input, impulse, constant input).
+Argument passing follows AAPCS for Cortex-M:
 
----
+```text
+R0 = N
+R1 = b pointer
+R2 = a pointer
+R3 = x_n
+R0 = return value y_n
+```
 
-## 5. References
+## Build Notes
 
-- Oppenheim & Schafer, *Discrete‑Time Signal Processing*.  
-- ARM® Architecture Procedure Call Standard (AAPCS).  
-- STM32CubeIDE user docs.
+This project is intended for ARM Cortex-M / STM32CubeIDE-style coursework. Enable semihosting to view the `printf()` comparison output from `main.c`.
+
+The selected assembly file should export the symbol `iir`, matching the C declaration in `main.c`.
+
+## Notes
+
+The repository is kept close to the final assignment version. The source files are intentionally not heavily refactored so the C reference and assembly implementations remain easy to compare.
